@@ -1,0 +1,51 @@
+// Prisma schema — HRMS
+// Phase 0 includes only the bare minimum (Organisation + User) so we can verify
+// the DB connection. The full schema (Employee, Team, TeamMember, AuditLog) is
+// introduced in Phase 1.
+//
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Phase 0 placeholder models ----------
+// We keep these minimal. Phase 1 will extend them and add the rest.
+
+model Organisation {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users User[]
+
+  @@map("organisations")
+}
+
+model User {
+  id             String   @id @default(uuid())
+  organisationId String   @map("organisation_id")
+  email          String   @unique
+  passwordHash   String   @map("password_hash")
+  name           String
+  role           Role     @default(MEMBER)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
+  @@map("users")
+}
+
+enum Role {
+  OWNER
+  MEMBER
+}

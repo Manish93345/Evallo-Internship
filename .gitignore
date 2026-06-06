@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+.env.local
+.DS_Store
+*.log
+logs/
+.vscode
+coverage
+SETUP_GUIDE.md
+HRMS_PROJECT_PLAN.html 
+docs
