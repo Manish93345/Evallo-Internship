@@ -1,7 +1,17 @@
-// Prisma schema — HRMS
-// Phase 0 includes only the bare minimum (Organisation + User) so we can verify
-// the DB connection. The full schema (Employee, Team, TeamMember, AuditLog) is
-// introduced in Phase 1.
+// Prisma schema — HRMS · Phase 1 (full data model)
+//
+// Six business models + one operational model:
+//   • Organisation  — tenant root
+//   • User          — owners/members that can log in
+//   • Employee      — HR records (NOT login users)
+//   • Team          — groups inside an organisation
+//   • TeamMember    — junction (employee ↔ team, many-to-many)
+//   • AuditLog      — append-only log of every meaningful backend action
+//   • RefreshToken  — DB-tracked refresh tokens (hashed) for rotation/revocation
+//
+// Multi-tenant rule: every non-shared table is scoped by `organisation_id`.
+// All queries in the service layer MUST filter by org to prevent cross-tenant
+// data leaks.
 //
 // Docs: https://pris.ly/d/prisma-schema
 
@@ -14,8 +24,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ---------- Phase 0 placeholder models ----------
-// We keep these minimal. Phase 1 will extend them and add the rest.
+// ---------- Core tenant + identity ----------
 
 model Organisation {
   id        String   @id @default(uuid())
@@ -24,7 +33,11 @@ model Organisation {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  users User[]
+  users         User[]
+  employees     Employee[]
+  teams         Team[]
+  auditLogs     AuditLog[]
+  refreshTokens RefreshToken[]
 
   @@map("organisations")
 }
@@ -39,7 +52,9 @@ model User {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  organisation  Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  auditLogs     AuditLog[]
+  refreshTokens RefreshToken[]
 
   @@index([organisationId])
   @@map("users")
@@ -48,4 +63,121 @@ model User {
 enum Role {
   OWNER
   MEMBER
+}
+
+// ---------- Business records (Phase 2 will hit these via CRUD) ----------
+
+model Employee {
+  id             String    @id @default(uuid())
+  organisationId String    @map("organisation_id")
+  firstName      String    @map("first_name")
+  lastName       String    @map("last_name")
+  email          String
+  position       String?
+  joinedAt       DateTime? @map("joined_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  teamMembers  TeamMember[]
+
+  // Email uniqueness is scoped per-organisation, not globally.
+  @@unique([organisationId, email])
+  @@index([organisationId])
+  @@map("employees")
+}
+
+model Team {
+  id             String   @id @default(uuid())
+  organisationId String   @map("organisation_id")
+  name           String
+  description    String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  members      TeamMember[]
+
+  // Team names are unique within an organisation.
+  @@unique([organisationId, name])
+  @@index([organisationId])
+  @@map("teams")
+}
+
+// Many-to-many junction table. The composite primary key prevents duplicate
+// assignments. ON DELETE CASCADE on both sides means deleting an employee or
+// team automatically cleans up their memberships — exactly what we want.
+model TeamMember {
+  employeeId String   @map("employee_id")
+  teamId     String   @map("team_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  team     Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([employeeId, teamId])
+  @@index([teamId])
+  @@index([employeeId])
+  @@map("team_members")
+}
+
+// ---------- Audit log (append-only) ----------
+
+model AuditLog {
+  id             String     @id @default(uuid())
+  organisationId String?    @map("organisation_id")
+  userId         String?    @map("user_id")
+  action         String
+  entityType     EntityType @map("entity_type")
+  entityId       String?    @map("entity_id")
+  metadata       Json?
+  ipAddress      String?    @map("ip_address")
+  userAgent      String?    @map("user_agent")
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  // userId is nullable because failed logins have no authenticated user yet.
+  // organisationId is nullable for the same reason (pre-auth events).
+  organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, createdAt(sort: Desc)])
+  @@index([userId])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+enum EntityType {
+  USER
+  EMPLOYEE
+  TEAM
+  TEAM_MEMBER
+  AUTH
+  ORGANISATION
+}
+
+// ---------- Refresh tokens (server-tracked for rotation + revocation) ----------
+//
+// We store SHA-256 hashes of refresh tokens, never the raw tokens. On /refresh
+// we verify the hash, mark the row as revoked, and issue a fresh pair (rotation).
+// On /logout we mark the active token as revoked. This prevents replay even
+// if a refresh token leaks — the next legitimate refresh would invalidate it.
+
+model RefreshToken {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  organisationId String    @map("organisation_id")
+  tokenHash      String    @unique @map("token_hash")
+  expiresAt      DateTime  @map("expires_at")
+  revokedAt      DateTime? @map("revoked_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  // For audit: where it was issued
+  ipAddress      String?   @map("ip_address")
+  userAgent      String?   @map("user_agent")
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
 }

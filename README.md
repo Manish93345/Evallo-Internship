@@ -6,7 +6,7 @@
 
 **Author:** Manish Kumar
 **Submitted to:** Evallo · Round 3 Full-Stack Engineer
-**Status:** Phase 0 (Foundation) complete · Phases 1–4 in `docs/PROJECT_PLAN.html`
+**Status:** Phase 0 + Phase 1 complete · Phases 2–4 in `docs/PROJECT_PLAN.html`
 
 ---
 
@@ -24,17 +24,27 @@
 
 ---
 
-## What's in this repo right now (Phase 0)
+## What's in this repo right now (Phases 0 + 1)
 
-Phase 0 is the **foundation** — no business features yet, but everything underneath them is in place and verified:
-
+**Phase 0 — Foundation:**
 - ✅ Monorepo (`backend/`, `frontend/`, `docs/`)
 - ✅ Backend boots: Express + TypeScript, structured Winston logging, Helmet, CORS, request IDs, global error handler
 - ✅ Frontend boots: React 18 + Vite + TypeScript + TailwindCSS
 - ✅ Prisma connected to Neon Postgres (`/api/v1/health` actually queries the DB)
 - ✅ Env validation with Zod (fails fast on misconfig)
-- ✅ Frontend home page hits the health endpoint and shows live system status
 - ✅ Graceful shutdown, request logging, no `console.log` debris
+
+**Phase 1 — Data & Auth:**
+- ✅ Full Prisma schema: `organisations`, `users`, `employees`, `teams`, `team_members` (junction), `audit_logs`, `refresh_tokens`
+- ✅ Auth endpoints: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
+- ✅ JWT access (15m) + refresh (7d), refresh tokens **rotated and hashed in DB** (revocation + reuse detection)
+- ✅ bcrypt (12 rounds), timing-safe login (no email enumeration)
+- ✅ `requireAuth` middleware attaches `req.auth.organisationId` for multi-tenant scoping
+- ✅ Per-route rate limiting (auth: 20 / 15 min · general API: 300 / min)
+- ✅ `audit_logs` populated for every auth event (success + failure)
+- ✅ Frontend: Login + Register pages, `AuthContext`, protected routes, axios interceptor with silent 401-refresh
+- ✅ Postman collection in `docs/postman_collection.json` — 9-step end-to-end test
+- ✅ Engineering notes in `docs/PHASE1_NOTES.md`
 
 The full phase plan with API surface, schema, and per-phase deliverables is in `docs/PROJECT_PLAN.html` — open it in any browser.
 
@@ -105,18 +115,18 @@ Now open `backend/.env` in your editor and fill in:
   ```
 - `JWT_REFRESH_SECRET` — a *different* random string, generated the same way
 
-Push the initial schema to Neon (creates the `organisations` and `users` tables):
+Push the schema to Neon (creates all 7 tables — organisations, users, employees, teams, team_members, audit_logs, refresh_tokens):
 
 ```bash
 npx prisma generate
-npx prisma migrate dev --name init
+npx prisma migrate dev --name phase1_init
 ```
 
 You should see:
 
 ```
 ✔ Generated Prisma Client
-✔ Applied migration 20250606_init
+✔ Applied migration 20260606_phase1_init
 ```
 
 Start the backend in dev mode:
@@ -161,12 +171,36 @@ You should see:
 
 Open **<http://localhost:5173>** in your browser.
 
-You should see a "System status" card with:
+You'll land on the **Sign in** page. To verify Phase 1 end-to-end:
 
-- 🟢 **Backend API:** `ok`
-- 🟢 **Database (Neon):** `connected`
+1. Click **Register** at the bottom of the login card.
+2. Create an organisation (e.g. *Acme Corp*) with your name, email and a password (≥ 8 chars, 1 letter + 1 digit).
+3. You'll be redirected to the dashboard, which shows:
+   - 🟢 Your authenticated user + organisation
+   - 🟢 Backend `ok` · Database `connected`
+   - Three placeholder cards for Employees / Teams / Audit Log (Phase 2/3)
+4. Click **Sign out** in the top right — you're redirected back to `/login`. The refresh token is now revoked server-side.
 
-If both are green, **Phase 0 is complete** — the entire stack (browser → Vite → Express → Prisma → Neon) is working end-to-end.
+### Running the Postman test suite
+
+The Postman collection covers **9 scenarios** including refresh-token rotation, post-logout invalidation, and bad-password handling:
+
+```bash
+npx -y newman run docs/postman_collection.json
+```
+
+All 9 requests should print green ticks.
+
+### Inspecting the audit log
+
+Every auth event is recorded. To see them:
+
+```bash
+cd backend
+npx prisma studio
+```
+
+Then open the `audit_logs` table — you'll see `ORG_REGISTERED`, `LOGIN_SUCCESS`, `LOGIN_FAILED`, `REFRESH_SUCCESS`, `LOGOUT` rows with IP, user-agent, and JSON metadata.
 
 ---
 
@@ -230,9 +264,9 @@ The full plan lives in **[`docs/PROJECT_PLAN.html`](docs/PROJECT_PLAN.html)** �
 | Phase | Focus | Effort |
 |------|-------|------|
 | **✅ Phase 0** | Foundation: monorepo, TS, Neon connection, health check | ~2–3h |
-| **Phase 1** | DB schema (Employee, Team, M:N junction, AuditLog) + JWT auth (register/login/refresh/logout) | ~3–4h |
+| **✅ Phase 1** | DB schema (Employee, Team, M:N junction, AuditLog, RefreshToken) + JWT auth (register/login/refresh/logout/me) + frontend auth scaffold | ~3–4h |
 | **Phase 2** | Backend CRUD: employees, teams, team-member assignments, audit log API, pagination, multi-tenant isolation | ~4–5h |
-| **Phase 3** | Frontend: protected routes, dashboard, employees & teams pages with forms, audit log viewer | ~4–5h |
+| **Phase 3** | Frontend: dashboard, employees & teams pages with forms, audit log viewer | ~4–5h |
 | **Phase 4** | Polish: tests (Vitest + Supertest), seed script, README screenshots, deployment (Render + Vercel), final sweep | ~2–3h |
 
 ---

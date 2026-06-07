@@ -9,6 +9,11 @@ import apiRoutes from './routes';
 export function createApp(): Express {
   const app = express();
 
+  // Behind a reverse proxy (Render/Railway/Vercel proxy) we need this so
+  // `req.ip` reflects the real client IP — important for rate-limiting and
+  // audit logging.
+  app.set('trust proxy', 1);
+
   // Security & infra middleware
   app.disable('x-powered-by');
   app.use(helmet());
@@ -29,7 +34,7 @@ export function createApp(): Express {
   app.get('/', (_req, res) => {
     res.json({
       name: 'HRMS API',
-      version: '0.1.0',
+      version: '0.2.0',
       docs: '/api/v1/health',
     });
   });
