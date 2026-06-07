@@ -529,7 +529,3 @@ in an inconsistent state from a previous half-run. Reset with
 ## License
 
 Submitted as an interview assignment for Evallo — not licensed for public use.
-
-## Contact
-
-**Manish Kumar** — [your-email@example.com] · [your-github-handle]
