@@ -1,0 +1,46 @@
+# Render blueprint for the HRMS backend.
+#
+# Usage:
+#   1. Push this repo to GitHub.
+#   2. In the Render dashboard → "New +" → "Blueprint" → connect the repo.
+#   3. Render reads this file and creates the web service automatically.
+#   4. Fill in the secret env vars marked `sync: false` in the UI.
+#
+# Notes:
+#   - The free plan spins down after 15 min of inactivity. Cold starts add
+#     ~30s to the first request. That's fine for an assignment demo.
+#   - Render auto-deploys on every push to the connected branch.
+#   - `prisma migrate deploy` runs as part of buildCommand so schema changes
+#     ship together with code.
+
+services:
+  - type: web
+    name: hrms-api
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: npm ci && npx prisma generate && npx prisma migrate deploy && npm run build
+    startCommand: node dist/server.js
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: JWT_ACCESS_TTL
+        value: 15m
+      - key: JWT_REFRESH_TTL
+        value: 7d
+      - key: BCRYPT_ROUNDS
+        value: 12
+      # Secrets — fill these in via the Render dashboard, not in code.
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false   # e.g. https://hrms-evallo.vercel.app

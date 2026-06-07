@@ -2,51 +2,108 @@
 
 > A multi-tenant Human Resource Management System with organisation-scoped
 > employee & team management, JWT auth, and a full audit trail.
-> Built with **Node.js + Express + TypeScript** on the backend, **React + Vite + TypeScript** on the frontend, and **Neon Postgres + Prisma** for data.
+> Built with **Node.js + Express + TypeScript** on the backend,
+> **React + Vite + TypeScript** on the frontend, and
+> **Neon Postgres + Prisma** for data.
 
 **Author:** Manish Kumar
 **Submitted to:** Evallo · Round 3 Full-Stack Engineer
-**Status:** Phase 0 + Phase 1 complete · Phases 2–4 in `docs/PROJECT_PLAN.html`
+**Status:** Phase 0 + 1 + 2 + 3 + 4 complete · running locally (deployment configs ready, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md))
+
+> 📸 Screenshots live in [`docs/screenshots/`](docs/screenshots/). Once captured, they render at the top of this README — see [`docs/SUBMISSION_CHECKLIST.md § 2`](docs/SUBMISSION_CHECKLIST.md).
+>
+> ▶️ **Want to verify every layer end-to-end?** Follow [`docs/TESTING_GUIDE.md`](docs/TESTING_GUIDE.md) — curl-by-curl backend smoke tests + click-by-click UI walkthrough.
 
 ---
 
 ## 📋 Table of contents
 
-1. [What's in this repo right now (Phase 0)](#whats-in-this-repo-right-now-phase-0)
-2. [Prerequisites](#prerequisites)
-3. [Step 1 — Create a free Neon Postgres database](#step-1--create-a-free-neon-postgres-database)
-4. [Step 2 — Backend setup](#step-2--backend-setup)
-5. [Step 3 — Frontend setup](#step-3--frontend-setup)
-6. [Step 4 — Verify everything is wired up](#step-4--verify-everything-is-wired-up)
+1. [What's in this repo](#whats-in-this-repo)
+2. [Tech stack & reasoning](#tech-stack--reasoning)
+3. [Prerequisites](#prerequisites)
+4. [Setup — Neon + Backend + Frontend](#setup--neon--backend--frontend)
+5. [Running the test suite](#running-the-test-suite)
+6. [Available scripts](#available-scripts)
 7. [Project structure](#project-structure)
-8. [Roadmap (Phases 1–4)](#roadmap-phases-14)
-9. [Troubleshooting](#troubleshooting)
+8. [API documentation](#api-documentation)
+9. [Design decisions & trade-offs](#design-decisions--trade-offs)
+10. [What I'd do with more time](#what-id-do-with-more-time)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
-## What's in this repo right now (Phases 0 + 1)
+## What's in this repo
 
-**Phase 0 — Foundation:**
-- ✅ Monorepo (`backend/`, `frontend/`, `docs/`)
-- ✅ Backend boots: Express + TypeScript, structured Winston logging, Helmet, CORS, request IDs, global error handler
-- ✅ Frontend boots: React 18 + Vite + TypeScript + TailwindCSS
-- ✅ Prisma connected to Neon Postgres (`/api/v1/health` actually queries the DB)
-- ✅ Env validation with Zod (fails fast on misconfig)
-- ✅ Graceful shutdown, request logging, no `console.log` debris
+**Phase 0 — Foundation:** Monorepo scaffold, TypeScript everywhere, Neon
+connection, env validation with Zod, structured Winston logs, graceful
+shutdown.
 
-**Phase 1 — Data & Auth:**
-- ✅ Full Prisma schema: `organisations`, `users`, `employees`, `teams`, `team_members` (junction), `audit_logs`, `refresh_tokens`
-- ✅ Auth endpoints: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
-- ✅ JWT access (15m) + refresh (7d), refresh tokens **rotated and hashed in DB** (revocation + reuse detection)
-- ✅ bcrypt (12 rounds), timing-safe login (no email enumeration)
-- ✅ `requireAuth` middleware attaches `req.auth.organisationId` for multi-tenant scoping
-- ✅ Per-route rate limiting (auth: 20 / 15 min · general API: 300 / min)
-- ✅ `audit_logs` populated for every auth event (success + failure)
-- ✅ Frontend: Login + Register pages, `AuthContext`, protected routes, axios interceptor with silent 401-refresh
-- ✅ Postman collection in `docs/postman_collection.json` — 9-step end-to-end test
-- ✅ Engineering notes in `docs/PHASE1_NOTES.md`
+**Phase 1 — Data & Auth:** Full Prisma schema (organisations, users,
+employees, teams, team_members, audit_logs, refresh_tokens). JWT access
+(15m) + refresh (7d) with **DB-tracked rotation + revocation**, bcrypt
+(12 rounds), timing-safe login, per-route rate limiting, every auth
+event recorded to `audit_logs`.
 
-The full phase plan with API surface, schema, and per-phase deliverables is in `docs/PROJECT_PLAN.html` — open it in any browser.
+**Phase 2 — Core API:** Employees CRUD, Teams CRUD, transactional
+**bulk team-member assignment**, audit-log API (OWNER-gated),
+multi-tenant guard via `lib/scope.ts` — cross-tenant access returns
+**404 (not 403)** so we don't leak existence. Postman collection with
+30 requests / 55 assertions.
+
+**Phase 3 — Frontend:** App shell, dashboard with live stats,
+Employees + Teams CRUD pages, Audit Logs page with action/entity/date
+filters and expandable before/after diffs, React Query everywhere,
+forms via `react-hook-form` + Zod, global error boundary, focus-trapped
+dialogs, empty states, loading skeletons, **dark / light theme toggle**.
+
+**Phase 4 — Polish (complete):**
+
+- ✅ **20 backend tests** with Vitest + Supertest across auth, employees,
+  teams, M:N assignment, multi-tenant isolation, and role gating.
+- ✅ **Prisma seed script** — `npm run seed` populates a demo tenant
+  (1 org · 2 users · 8 employees · 3 teams · realistic assignments)
+  so reviewers can log in and explore immediately.
+- ✅ **Final sweep** — no `console.log`s in `src/`, no dead code, no
+  TODOs, `lint` + `typecheck` clean in both packages.
+- ✅ **Deployment configs** — `backend/render.yaml` blueprint and
+  `frontend/vercel.json` committed; `docs/DEPLOYMENT.md` is a step-by-step
+  runbook. Whoever wants live URLs gets there in ~20 minutes.
+- ✅ **GitHub Actions CI** — typecheck + lint + build on every push.
+  Tests gated behind a commented block so the repo doesn't require
+  a Postgres secret to run green.
+- ✅ **End-to-end testing guide** — `docs/TESTING_GUIDE.md` walks a
+  reviewer through verifying every layer (DB → API → UI → automated
+  suite → multi-tenant isolation) curl-by-curl and click-by-click.
+- ✅ **Submission checklist** — `docs/SUBMISSION_CHECKLIST.md` for the
+  final-mile work: screenshots, commit-history polish, clean rebuild,
+  zip command, email template.
+- ✅ Engineering notes for each phase in `docs/PHASE{1,2,3,4}_NOTES.md`.
+
+The full original phase plan is in `docs/PROJECT_PLAN.html` — open it
+in any browser.
+
+---
+
+## Tech stack & reasoning
+
+| Layer | Choice | Why this over the alternative |
+|---|---|---|
+| **Runtime** | Node.js 20 LTS | LTS, mature ecosystem, single language across the stack |
+| **HTTP framework** | Express 4 | Boring is good for an assignment — every reviewer knows it. Fastify would be ~2× faster but adds learning curve |
+| **Language** | TypeScript (strict) | Catches whole classes of bugs (typoed orgId, missing fields) at compile time |
+| **DB** | Postgres (Neon) | Real relational DB. Neon's free tier + branching = no Docker required, fast test isolation |
+| **ORM** | Prisma 5 | Type-safe queries, painless migrations, excellent docs. Trade-off: heavier than Drizzle, but the DX wins |
+| **Validation** | Zod | One schema → request validation + TS types. Shared mental model on frontend & backend |
+| **Auth** | JWT (access + refresh) + bcrypt | Stateless access tokens, DB-tracked refresh tokens for rotation/revocation. Refresh tokens are SHA-256-hashed before storage |
+| **Logging** | Winston | Structured JSON in prod, colourised in dev, with request IDs |
+| **Rate limiting** | `express-rate-limit` | In-memory is fine for an assignment. Production would back it with Redis |
+| **Testing** | Vitest + Supertest | Vitest is fast and modern; Supertest is the canonical Express integration helper |
+| **Frontend build** | Vite | Sub-second HMR, no Webpack config to babysit |
+| **Frontend framework** | React 18 + React Router 6 | Familiar to every reviewer |
+| **Data fetching** | React Query (TanStack) | Cache + invalidation + `placeholderData: prev` for flicker-free pagination |
+| **Forms** | react-hook-form + Zod | Uncontrolled inputs (fewer re-renders) + the same Zod schemas as the backend |
+| **Styling** | Tailwind CSS | Atomic utilities, zero CSS file maintenance, dark-mode driven by `data-theme` |
+| **Icons** | lucide-react | Tree-shakeable, no icon-font bloat |
 
 ---
 
@@ -55,84 +112,63 @@ The full phase plan with API surface, schema, and per-phase deliverables is in `
 | Tool | Version | Why |
 |------|---------|-----|
 | **Node.js** | ≥ 18.18 (LTS recommended) | Backend + frontend runtime |
-| **npm** | comes with Node | Package management |
+| **npm** | bundled with Node | Package management |
 | **Git** | any recent | (Optional) version control |
-| **A Neon account** | free tier | Postgres database |
+| **Neon account** | free tier | Postgres database |
 
-> No Docker, no local Postgres install, no extra services required.
+> No Docker, no local Postgres, no extra services required.
 
 Check your versions:
 
 ```bash
-node --version    # should print v18.x or v20.x
+node --version    # → v18.x or v20.x
 npm --version
 ```
 
 ---
 
-## Step 1 — Create a free Neon Postgres database
+## Setup — Neon + Backend + Frontend
 
-Neon gives you a real Postgres database in about 30 seconds, with a generous free tier. It's the easiest way to skip Docker entirely.
+### Step 1 — Create a free Neon Postgres database
 
-1. Go to **<https://neon.tech>** and sign up (Google/GitHub login works).
-2. Click **"Create project"**.
-   - **Project name:** `hrms-evallo` (anything you like)
-   - **Postgres version:** 16 (default is fine)
-   - **Region:** pick the one closest to you (e.g. `AWS ap-south-1` for India)
-3. After it's created, Neon shows you a **Connection string**. Click the **"Pooled connection"** toggle — Prisma works best with the pooled connection string. It looks like this:
+1. Go to <https://neon.tech>, sign up, click **Create project**:
+   - Project name: `hrms-evallo`
+   - Postgres 16, the region closest to you (e.g. `AWS ap-south-1`)
+2. On the project dashboard, switch to the **Pooled connection** toggle
+   and copy the connection string. It looks like:
 
    ```
-   postgresql://hrms_owner:AbCd1234XYZ@ep-cool-mountain-12345-pooler.ap-south-1.aws.neon.tech/hrms?sslmode=require
+   postgresql://USER:PASSWORD@ep-xxx-pooler.region.aws.neon.tech/DB?sslmode=require
    ```
 
-4. **Copy that string** — you'll paste it into `backend/.env` in the next step. (You can always come back to the Neon console to find it again under *Dashboard → Connection Details*.)
+3. **(Recommended)** Create a second branch named `test` from the
+   "Branches" tab — copy that pooled URL too. We'll use it to isolate
+   the test suite from your dev data.
 
-> 💡 **Note:** Neon auto-suspends idle databases after ~5 minutes on the free tier. The first request after a pause takes ~1 second to wake it up — totally normal.
-
----
-
-## Step 2 — Backend setup
-
-From the project root:
+### Step 2 — Backend setup
 
 ```bash
 cd backend
 npm install
-```
-
-Create your environment file:
-
-```bash
 cp .env.example .env
 ```
 
-Now open `backend/.env` in your editor and fill in:
+Edit `backend/.env`:
 
-- `DATABASE_URL` — paste the Neon connection string from Step 1
-- `JWT_ACCESS_SECRET` — any long random string. Quick way to generate one:
+- `DATABASE_URL` → your dev Neon URL
+- `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` → any long random strings.
+  Generate with:
   ```bash
   node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
   ```
-- `JWT_REFRESH_SECRET` — a *different* random string, generated the same way
 
-Push the schema to Neon (creates all 7 tables — organisations, users, employees, teams, team_members, audit_logs, refresh_tokens):
+Then apply the schema, seed demo data, and start the dev server:
 
 ```bash
 npx prisma generate
-npx prisma migrate dev --name phase1_init
-```
-
-You should see:
-
-```
-✔ Generated Prisma Client
-✔ Applied migration 20260606_phase1_init
-```
-
-Start the backend in dev mode:
-
-```bash
-npm run dev
+npx prisma migrate dev
+npm run seed         # populates Acme Corp with 8 employees, 3 teams
+npm run dev          # → http://localhost:4000
 ```
 
 You should see:
@@ -140,67 +176,98 @@ You should see:
 ```
 HH:MM:SS [info] ✅ Database connection verified
 HH:MM:SS [info] 🚀 HRMS backend listening on http://localhost:4000
-HH:MM:SS [info]    Environment: development
-HH:MM:SS [info]    Health:      http://localhost:4000/api/v1/health
 ```
 
-Open <http://localhost:4000/api/v1/health> in your browser — you should see JSON with `"db": "connected"`.
+Hit <http://localhost:4000/api/v1/health> — you should see `"db": "connected"`.
 
----
+### Step 3 — Frontend setup
 
-## Step 3 — Frontend setup
-
-**Open a second terminal**, leaving the backend running:
+In a **second terminal**:
 
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev          # → http://localhost:5173
 ```
 
-You should see:
+Open <http://localhost:5173> and sign in with the seeded credentials:
 
 ```
-  VITE v5.x.x  ready in 400 ms
-  ➜  Local:   http://localhost:5173/
+Email:    owner@acme.test
+Password: Password123
 ```
+
+The dashboard, employees, teams, and audit-log pages will already have data.
 
 ---
 
-## Step 4 — Verify everything is wired up
+## Running the test suite
 
-Open **<http://localhost:5173>** in your browser.
+The Vitest + Supertest suite covers **20 tests across 4 files** — auth
+flows (happy + failure), employees CRUD + 404s + duplicate-email, teams
+CRUD + bulk assignment + idempotency, and the all-important multi-tenant
+isolation guarantees.
 
-You'll land on the **Sign in** page. To verify Phase 1 end-to-end:
+```bash
+cd backend
 
-1. Click **Register** at the bottom of the login card.
-2. Create an organisation (e.g. *Acme Corp*) with your name, email and a password (≥ 8 chars, 1 letter + 1 digit).
-3. You'll be redirected to the dashboard, which shows:
-   - 🟢 Your authenticated user + organisation
-   - 🟢 Backend `ok` · Database `connected`
-   - Three placeholder cards for Employees / Teams / Audit Log (Phase 2/3)
-4. Click **Sign out** in the top right — you're redirected back to `/login`. The refresh token is now revoked server-side.
+# One-time: configure a test DB (a Neon branch is ideal)
+cp .env.test.example .env.test
+# → paste the TEST_DATABASE_URL of your Neon `test` branch
 
-### Running the Postman test suite
+# One-time: push the schema to the test branch
+DATABASE_URL=$(grep TEST_DATABASE_URL .env.test | cut -d '"' -f2) \
+  npx prisma migrate deploy
 
-The Postman collection covers **9 scenarios** including refresh-token rotation, post-logout invalidation, and bad-password handling:
+# Run the whole suite
+npm test
+```
+
+Expected output: 4 test files, 20 tests, all green, ~10s wall time.
+
+> **No `TEST_DATABASE_URL` set?** Tests fall back to your dev
+> `DATABASE_URL` and print a warning. Tests still pass, but they will
+> truncate your dev tables between suites — re-run `npm run seed` after.
+
+### Postman / Newman
+
+The full 30-request Postman collection lives at `docs/postman_collection.json`:
 
 ```bash
 npx -y newman run docs/postman_collection.json
 ```
 
-All 9 requests should print green ticks.
+Covers register → login → refresh-rotation → employee CRUD → team CRUD
+→ M:N assignment → org isolation → owner-only audit-log gate.
 
-### Inspecting the audit log
+---
 
-Every auth event is recorded. To see them:
+## Available scripts
 
-```bash
-cd backend
-npx prisma studio
-```
+### Backend (`cd backend`)
 
-Then open the `audit_logs` table — you'll see `ORG_REGISTERED`, `LOGIN_SUCCESS`, `LOGIN_FAILED`, `REFRESH_SUCCESS`, `LOGOUT` rows with IP, user-agent, and JSON metadata.
+| Script | What it does |
+|---|---|
+| `npm run dev` | Start with hot reload (ts-node-dev) on port 4000 |
+| `npm run build` | TypeScript → `dist/` |
+| `npm start` | Run the compiled `dist/server.js` |
+| `npm run seed` | Populate the dev DB with the demo Acme Corp tenant |
+| `npm test` | Run the Vitest suite once |
+| `npm run test:watch` | Re-run tests on file change |
+| `npm run lint` | ESLint over `src/` |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run prisma:migrate` | `prisma migrate dev` |
+| `npm run prisma:studio` | Open Prisma Studio (visual DB browser) |
+
+### Frontend (`cd frontend`)
+
+| Script | What it does |
+|---|---|
+| `npm run dev` | Vite dev server (port 5173) with backend proxy |
+| `npm run build` | Production bundle to `dist/` |
+| `npm run preview` | Preview the production build locally |
+| `npm run lint` | ESLint over `src/` |
+| `npm run typecheck` | `tsc --noEmit` |
 
 ---
 
@@ -210,64 +277,191 @@ Then open the `audit_logs` table — you'll see `ORG_REGISTERED`, `LOGIN_SUCCESS
 hrms-evallo/
 ├── backend/
 │   ├── prisma/
-│   │   └── schema.prisma          # Database schema (Phase 0: Org + User)
+│   │   ├── schema.prisma            ← 7 models incl. audit_logs + refresh_tokens
+│   │   ├── seed.ts                  ← demo tenant: Acme Corp (Phase 4)
+│   │   └── migrations/
 │   ├── src/
-│   │   ├── config/                # env validation, db client, logger
-│   │   │   ├── db.ts
-│   │   │   ├── env.ts
-│   │   │   └── logger.ts
-│   │   ├── middleware/            # error handler, request logger
-│   │   │   ├── errorHandler.ts
-│   │   │   └── requestLogger.ts
-│   │   ├── modules/               # Feature modules (one folder per feature)
+│   │   ├── config/                  ← env (zod), db (prisma), logger (winston)
+│   │   ├── lib/                     ← jwt, password, scope, audit, pagination
+│   │   ├── middleware/              ← requireAuth, errorHandler, rateLimit, requestLogger
+│   │   ├── modules/
+│   │   │   ├── auth/                ← register, login, refresh, logout, me
+│   │   │   ├── employees/           ← CRUD with team multi-select
+│   │   │   ├── teams/               ← CRUD + bulk-assign + remove-member
+│   │   │   ├── auditLogs/           ← filterable read API (OWNER only)
 │   │   │   └── health/
-│   │   │       └── health.routes.ts
-│   │   ├── routes/
-│   │   │   └── index.ts           # Combines all module routers under /api/v1
-│   │   ├── utils/
-│   │   │   ├── ApiError.ts
-│   │   │   └── asyncHandler.ts
-│   │   ├── app.ts                 # Express app factory (testable)
-│   │   └── server.ts              # Boot script
+│   │   ├── routes/index.ts
+│   │   ├── types/express.d.ts       ← req.auth ambient type
+│   │   ├── app.ts                   ← Express factory (testable, no listen())
+│   │   └── server.ts                ← boot script
+│   ├── tests/                       ← Vitest + Supertest (Phase 4)
+│   │   ├── setup.ts
+│   │   ├── helpers.ts
+│   │   ├── auth.test.ts
+│   │   ├── employees.test.ts
+│   │   ├── teams.test.ts
+│   │   └── orgIsolation.test.ts
+│   ├── vitest.config.ts             ← Phase 4
 │   ├── .env.example
-│   ├── package.json
-│   └── tsconfig.json
+│   ├── .env.test.example            ← Phase 4
+│   └── package.json
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── lib/
-│   │   │   └── api.ts             # Axios instance
-│   │   ├── App.tsx                # Phase 0 status page
-│   │   ├── main.tsx
-│   │   ├── index.css
-│   │   └── vite-env.d.ts
-│   ├── .env.example
-│   ├── index.html
-│   ├── package.json
-│   ├── postcss.config.js
-│   ├── tailwind.config.js
-│   ├── tsconfig.json
-│   └── vite.config.ts
+│   │   ├── components/
+│   │   │   ├── layout/AppShell.tsx
+│   │   │   ├── ui/                  ← Button, Input, Dialog, Table, Toast, …
+│   │   │   └── ErrorBoundary.tsx
+│   │   ├── context/                 ← AuthContext, ThemeContext
+│   │   ├── features/
+│   │   │   ├── employees/           ← EmployeeForm, TeamMultiSelect
+│   │   │   ├── teams/               ← TeamForm, ManageMembersDialog
+│   │   │   └── auditLogs/MetadataDiff.tsx
+│   │   ├── hooks/                   ← useDebounce, useEmployees, useTeams, useAuditLogs
+│   │   ├── lib/                     ← api (axios + refresh), authApi, employeesApi, …
+│   │   ├── pages/                   ← Dashboard, Employees, Teams, AuditLogs, Login, Register
+│   │   ├── routes/ProtectedRoute.tsx
+│   │   └── App.tsx
+│   ├── vite.config.ts
+│   └── tailwind.config.js
 │
 ├── docs/
-│   └── PROJECT_PLAN.html          # ⭐ Full 5-phase build plan — open in browser
+│   ├── PROJECT_PLAN.html            ← the original master plan
+│   ├── postman_collection.json      ← 30 requests, 55 assertions
+│   ├── PHASE1_NOTES.md
+│   ├── PHASE2_NOTES.md
+│   ├── PHASE3_NOTES.md
+│   └── PHASE4_NOTES.md              ← Phase 4 engineering notes
 │
-└── README.md                      # ← you are here
+├── SETUP_GUIDE.md
+└── README.md                        ← you are here
 ```
 
 ---
 
-## Roadmap (Phases 1–4)
+## API documentation
 
-The full plan lives in **[`docs/PROJECT_PLAN.html`](docs/PROJECT_PLAN.html)** — open it in any browser for the detailed version. Quick summary:
+All endpoints are mounted under `/api/v1` and return JSON. Standard list
+envelope: `{ data: T[], pagination: { total, page, limit, pages } }`.
 
-| Phase | Focus | Effort |
-|------|-------|------|
-| **✅ Phase 0** | Foundation: monorepo, TS, Neon connection, health check | ~2–3h |
-| **✅ Phase 1** | DB schema (Employee, Team, M:N junction, AuditLog, RefreshToken) + JWT auth (register/login/refresh/logout/me) + frontend auth scaffold | ~3–4h |
-| **Phase 2** | Backend CRUD: employees, teams, team-member assignments, audit log API, pagination, multi-tenant isolation | ~4–5h |
-| **Phase 3** | Frontend: dashboard, employees & teams pages with forms, audit log viewer | ~4–5h |
-| **Phase 4** | Polish: tests (Vitest + Supertest), seed script, README screenshots, deployment (Render + Vercel), final sweep | ~2–3h |
+| Method | Path | Purpose | Auth |
+|---|---|---|---|
+| POST | `/auth/register` | Create organisation + first OWNER user | — |
+| POST | `/auth/login` | Issue access + refresh tokens | — |
+| POST | `/auth/refresh` | Rotate refresh token, issue a fresh pair | — |
+| POST | `/auth/logout` | Revoke session(s) | Bearer |
+| GET | `/auth/me` | Current user + organisation | Bearer |
+| GET | `/employees` | Paginated, searchable list (`?page&limit&q`) | Bearer |
+| POST | `/employees` | Create (optionally with `teamIds[]`) | Bearer |
+| GET | `/employees/:id` | Single employee with assigned teams | Bearer |
+| PATCH | `/employees/:id` | Partial update | Bearer |
+| DELETE | `/employees/:id` | Delete (cascades team_members) | Bearer |
+| GET | `/teams` | Paginated list with `memberCount` | Bearer |
+| POST | `/teams` | Create team | Bearer |
+| GET | `/teams/:id` | Single team with members | Bearer |
+| PATCH | `/teams/:id` | Partial update | Bearer |
+| DELETE | `/teams/:id` | Delete (cascades team_members) | Bearer |
+| POST | `/teams/:id/members` | Bulk assign employees (transactional, idempotent) | Bearer |
+| DELETE | `/teams/:id/members/:employeeId` | Remove one membership | Bearer |
+| GET | `/audit-logs` | Filterable log (`action`, `entityType`, `from`, `to`, `userId`) | Bearer + **OWNER** |
+| GET | `/health` | Liveness + DB ping | — |
+
+Full request/response examples are in `docs/postman_collection.json`.
+
+---
+
+## Design decisions & trade-offs
+
+**1. 404 instead of 403 on cross-tenant access.**
+If org B tries to GET an employee that belongs to org A, we return
+`404 NOT_FOUND` — not `403 FORBIDDEN`. Returning 403 would leak the
+fact that the resource exists in another tenant. The whole 6-test
+isolation suite in `tests/orgIsolation.test.ts` is built around this
+guarantee.
+
+**2. Refresh tokens are rotated *and* revoked on every refresh.**
+Each refresh mints a brand-new refresh token and marks the old row as
+revoked in `refresh_tokens`. If the same refresh token comes in twice
+(reuse → likely theft), we conservatively revoke *every* active session
+for that user. Tokens are SHA-256-hashed before storage so a DB leak
+doesn't immediately compromise sessions.
+
+**3. Single source of truth for shapes — Zod schemas.**
+Every endpoint's `*.schema.ts` exports both the runtime validator and
+the inferred TypeScript type. The controller does `Schema.parse(req.body)`
+and the rest of the handler is strongly typed for free. The frontend
+uses the same Zod patterns in `react-hook-form` so a server 422 is a
+genuine business conflict (e.g. duplicate email), not a UX gap.
+
+**4. Optimistic-ish pagination with React Query's `placeholderData: prev`.**
+When you jump from page 2 to page 3 of the employees table, the previous
+page stays visible *while* the next page loads — so the user never sees
+a flash of skeleton rows for content they already had context for.
+
+**5. Dark-mode via `data-theme` attribute, not `class="dark"`.**
+The product was designed dark-first using arbitrary Tailwind colour values.
+Retrofitting every surface into `dark:` variants would touch dozens of
+files for marginal benefit. Instead, an attribute-scoped override layer
+in `src/index.css` recolours the most common hex values when
+`data-theme="light"`. The Tailwind config still supports `dark:` for
+any future styles. Trade-off: not a "complete" Tailwind theming setup,
+but ships faster.
+
+**6. Tests use a real Postgres, not a mock.**
+The whole point of testing a multi-tenant API is to prove the tenant
+guard works against actual SQL. We use a separate Neon branch for tests
+(takes ~5 seconds to create — way better than spinning up local Postgres).
+
+**7. Real DB writes in `audit_logs` for every meaningful action.**
+Mutations record a `{ before, after }` diff in `metadata` so the
+frontend can render a two-column diff view. Failed logins record a
+row too (with `userId = null`) so security teams can spot brute-force
+attempts. Audit writes are best-effort: a failure there never bubbles
+up to fail the user request.
+
+**8. JWT + Bearer instead of httpOnly cookies.**
+Bearer tokens keep the frontend deploy story simple (no shared parent
+domain required, no CSRF) at the cost of LocalStorage exposure. The
+15-minute access TTL minimises the damage window, and refresh tokens
+never touch the regular API surface — they only travel to
+`/auth/refresh`.
+
+---
+
+## What I'd do with more time
+
+- **Frontend tests** — Vitest + React Testing Library for the
+  Employees/Teams pages, especially the dialogs.
+- **Playwright E2E** — one happy-path script that registers, adds an
+  employee, creates a team, and asserts the audit log. The killer
+  reviewer demo.
+- **Richer RBAC** — split MEMBER into EDITOR vs VIEWER, gate mutations
+  in the UI as well as the API. Currently only OWNER and MEMBER exist.
+- **OpenAPI / Swagger UI** — generate the spec from the Zod schemas
+  and host it on `/api/v1/docs`. Postman is good, OpenAPI is better.
+- **File uploads** — employee avatars via S3 / R2 presigned URLs.
+- **Soft deletes + history** — `deletedAt` instead of `DELETE`, so the
+  audit trail keeps referential integrity.
+- **Redis-backed rate limiting** — the current in-memory limiter works
+  for one Node process but doesn't survive a restart or scale to
+  multiple instances.
+- **Observability** — wire Winston into Datadog/Logtail, expose a
+  Prometheus `/metrics` endpoint.
+
+---
+
+## Deployment
+
+Not deployed by default — this assignment is being submitted running
+locally. The configs to deploy are committed and the runbook is in
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md):
+
+- **Backend → Render** via `backend/render.yaml` (one-click Blueprint).
+- **Frontend → Vercel** via `frontend/vercel.json`.
+- **Database** → same Neon project (the free tier handles dev + prod
+  comfortably for an assignment).
+
+End-to-end deployment takes ~20 minutes on free tiers.
 
 ---
 
@@ -276,34 +470,58 @@ The full plan lives in **[`docs/PROJECT_PLAN.html`](docs/PROJECT_PLAN.html)** �
 <details>
 <summary><strong>"Invalid environment variables" on backend start</strong></summary>
 
-The env validator caught a missing or bad value in `.env`. The error output tells you which field is the problem. Most common: `DATABASE_URL` not a valid URL, or one of the JWT secrets shorter than 32 characters.
+The Zod env validator caught a missing or bad value in `.env`. The
+error output tells you which field is the problem. Most common:
+`DATABASE_URL` not a valid URL, or one of the JWT secrets shorter than
+32 characters.
 </details>
 
 <details>
 <summary><strong>Backend says "Could not connect to the database"</strong></summary>
 
-1. Double-check `DATABASE_URL` is the **pooled** connection string from Neon, with `?sslmode=require` at the end.
-2. Visit your Neon console — if the project is paused, run any query in the SQL editor to wake it.
-3. Check that no firewall is blocking outbound 443 to `*.neon.tech`.
+1. Double-check `DATABASE_URL` is the **pooled** connection string
+   from Neon, with `?sslmode=require` at the end.
+2. Visit your Neon console — if the project is paused, run any query
+   in the SQL editor to wake it (free-tier Neon auto-suspends after
+   ~5 min of idle).
 </details>
 
 <details>
 <summary><strong>Frontend shows "Backend unreachable"</strong></summary>
 
-The backend isn't running, or it's running on a different port. Confirm the backend terminal shows `🚀 HRMS backend listening on http://localhost:4000`. If you changed `PORT` in `.env`, also update `vite.config.ts`'s proxy target.
+The backend isn't running, or it's running on a different port. Confirm
+the backend terminal shows `🚀 HRMS backend listening on http://localhost:4000`.
+If you changed `PORT` in `.env`, also update the proxy target in
+`frontend/vite.config.ts`.
 </details>
 
 <details>
-<summary><strong>Prisma migrate error: "P1001: Can't reach database server"</strong></summary>
+<summary><strong>Tests fail with "relation does not exist"</strong></summary>
 
-Same as above — `DATABASE_URL` is wrong or Neon is paused. The `?sslmode=require` query param is mandatory.
+The test database doesn't have the schema applied yet. From
+`backend/`:
+
+```bash
+DATABASE_URL=$(grep TEST_DATABASE_URL .env.test | cut -d '"' -f2) \
+  npx prisma migrate deploy
+```
+</details>
+
+<details>
+<summary><strong>Seed says "P2002 unique constraint failed"</strong></summary>
+
+This shouldn't happen — the seed is idempotent. If it does, your DB is
+in an inconsistent state from a previous half-run. Reset with
+`npx prisma migrate reset` (⚠ drops all data) and re-seed.
 </details>
 
 <details>
 <summary><strong>Port 4000 or 5173 already in use</strong></summary>
 
-- Backend: change `PORT` in `backend/.env` and update the proxy target in `frontend/vite.config.ts`.
-- Frontend: `npm run dev -- --port 5174` then update `CORS_ORIGIN` in `backend/.env`.
+- Backend: change `PORT` in `backend/.env` and update the proxy target
+  in `frontend/vite.config.ts`.
+- Frontend: `npm run dev -- --port 5174` then update `CORS_ORIGIN` in
+  `backend/.env`.
 </details>
 
 ---

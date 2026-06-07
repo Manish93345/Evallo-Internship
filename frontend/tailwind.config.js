@@ -1,6 +1,12 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
+  // We drive theme via the `data-theme` attribute on <html> rather than a
+  // `class` toggle. This keeps the existing dark-by-default styling
+  // intact and lets us layer light overrides through CSS selectors in
+  // `src/index.css`. If we ever want to start using `dark:` variants
+  // in components, they'll activate when data-theme is "dark".
+  darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
